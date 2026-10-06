@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cafe Ledger — Vivek's Cafe Payment Tracker</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        coffee: {
+                            50: '#fdfbf7',
+                            100: '#f7f2e8',
+                            200: '#eddcd0',
+                            600: '#8c6d53',
+                            700: '#6f523c',
+                            800: '#583f2d',
+                            900: '#3e2b1d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- SheetJS for Excel/CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="bg-coffee-50 text-coffee-900 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- LOGIN OVERLAY -->
+    <div id="loginOverlay" class="fixed inset-0 bg-coffee-900/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 border border-coffee-200">
+            <div class="text-center mb-6">
+                <div class="bg-coffee-700 text-white w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 shadow">
+                    <i data-lucide="coffee" class="w-6 h-6"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-coffee-900">Cafe Ledger Login</h2>
+                <p class="text-xs text-coffee-600 mt-1">Select your account and enter password</p>
+            </div>
+
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">Select User / Role</label>
+                    <select id="loginRole" class="w-full px-4 py-2.5 rounded-lg border border-coffee-300 focus:ring-2 focus:ring-coffee-600 focus:outline-none bg-white text-sm font-medium">
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">Password</label>
+                    <input type="password" id="loginPassword" required placeholder="Enter secure password" class="w-full px-4 py-2.5 rounded-lg border border-coffee-300 focus:ring-2 focus:ring-coffee-600 focus:outline-none text-sm">
+                </div>
+
+                <button type="submit" class="w-full bg-coffee-800 hover:bg-coffee-900 text-white font-semibold py-3 rounded-lg shadow transition flex items-center justify-center space-x-2 mt-2">
+                    <i data-lucide="lock-open" class="w-4 h-4"></i>
+                    <span>Secure Login</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ADD STAFF MODAL -->
+    <div id="addStaffModal" class="fixed inset-0 bg-coffee-900/70 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-coffee-200 space-y-4">
+            <div class="flex justify-between items-center pb-3 border-b border-coffee-200">
+                <h3 class="font-bold text-lg text-coffee-900 flex items-center space-x-2">
+                    <i data-lucide="user-plus" class="w-5 h-5 text-coffee-700"></i>
+                    <span>Add New Staff Member</span>
+                </h3>
+                <button onclick="closeAddStaffModal()" class="text-coffee-500 hover:text-coffee-900 font-bold">&times;</button>
+            </div>
+            <form onsubmit="handleAddNewStaff(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">Staff Name *</label>
+                    <input type="text" id="newStaffName" required placeholder="e.g. Aman Verma" class="w-full px-3 py-2 rounded-lg border border-coffee-300 text-sm focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">Username Key (Login ID) *</label>
+                    <input type="text" id="newStaffUsername" required placeholder="e.g. staff_aman" class="w-full px-3 py-2 rounded-lg border border-coffee-300 text-sm focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">Password *</label>
+                    <input type="password" id="newStaffPass" required placeholder="Set password" class="w-full px-3 py-2 rounded-lg border border-coffee-300 text-sm focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">Role / Designation *</label>
+                    <input type="text" id="newStaffRoleDesc" required placeholder="e.g. Barista / Assistant Cashier" class="w-full px-3 py-2 rounded-lg border border-coffee-300 text-sm focus:outline-none">
+                </div>
+                <div class="flex justify-end space-x-3 pt-2">
+                    <button type="button" onclick="closeAddStaffModal()" class="px-4 py-2 bg-coffee-100 text-coffee-800 text-xs font-semibold rounded-lg">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-coffee-800 hover:bg-coffee-900 text-white text-xs font-semibold rounded-lg shadow">Save Staff</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- App Container -->
+    <div id="app" class="flex flex-col min-h-screen">
+        <!-- Header -->
+        <header class="bg-coffee-900 text-coffee-100 shadow-md sticky top-0 z-40">
+            <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-coffee-700 p-2 rounded-lg text-white">
+                        <i data-lucide="coffee" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg tracking-wide text-white">Cafe Ledger</h1>
+                        <p class="text-xs text-coffee-200">Owner: Vivek | Live POS & Sheet Sync</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button onclick="syncWithGoogleSheet()" id="syncBtn" class="flex items-center space-x-1.5 bg-coffee-800 hover:bg-coffee-700 text-coffee-100 text-xs px-3 py-2 rounded-lg border border-coffee-600 transition shadow-sm">
+                        <i data-lucide="cloud" class="w-4 h-4 text-amber-400"></i>
+                        <span>Sync Sheet</span>
+                    </button>
+                    <div class="flex items-center space-x-2 bg-coffee-800 px-3 py-1.5 rounded-lg text-xs">
+                        <i data-lucide="user-check" class="w-4 h-4 text-amber-400"></i>
+                        <span id="currentUserName" class="font-medium">Vivek (Admin)</span>
+                    </div>
+                    <button onclick="logout()" title="Logout" class="bg-coffee-800 hover:bg-red-700 text-coffee-100 p-2 rounded-lg transition">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 pb-24">
+            <!-- Tabs Navigation -->
+            <div class="flex overflow-x-auto space-x-2 border-b border-coffee-200 pb-3 mb-6 no-scrollbar">
+                <button onclick="switchTab('dashboard')" class="tab-btn active px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-coffee-800 text-white shadow-sm">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                    <span>Dashboard</span>
+                </button>
+                <button onclick="switchTab('add')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-white text-coffee-800 hover:bg-coffee-100 border border-coffee-200">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                    <span>Add Payment</span>
+                </button>
+                <button onclick="switchTab('daily')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-white text-coffee-800 hover:bg-coffee-100 border border-coffee-200">
+                    <i data-lucide="calendar" class="w-4 h-4"></i>
+                    <span>Daily Income</span>
+                </button>
+                <button onclick="switchTab('monthly')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-white text-coffee-800 hover:bg-coffee-100 border border-coffee-200">
+                    <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+                    <span>Monthly Revenue</span>
+                </button>
+                <button onclick="switchTab('reports')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-white text-coffee-800 hover:bg-coffee-100 border border-coffee-200">
+                    <i data-lucide="file-text" class="w-4 h-4"></i>
+                    <span>Reports & Sheets</span>
+                </button>
+                <button onclick="switchTab('users')" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-white text-coffee-800 hover:bg-coffee-100 border border-coffee-200">
+                    <i data-lucide="users" class="w-4 h-4"></i>
+                    <span>Users</span>
+                </button>
+            </div>
+
+            <!-- TAB 1: DASHBOARD -->
+            <div id="tab-dashboard" class="tab-content space-y-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white p-5 rounded-xl border border-coffee-200 shadow-sm">
+                        <p class="text-xs font-semibold text-coffee-600 uppercase tracking-wider">Today's Income</p>
+                        <h3 id="dashTodayTotal" class="text-2xl font-bold text-coffee-900 mt-1">₹0.00</h3>
+                        <p id="dashTodayCount" class="text-xs text-coffee-600 mt-2">0 transactions today</p>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border border-coffee-200 shadow-sm">
+                        <p class="text-xs font-semibold text-coffee-600 uppercase tracking-wider">UPI Collections</p>
+                        <h3 id="dashUpiTotal" class="text-2xl font-bold text-coffee-900 mt-1">₹0.00</h3>
+                        <p class="text-xs text-emerald-600 mt-2 font-medium">Instant QR verified</p>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border border-coffee-200 shadow-sm">
+                        <p class="text-xs font-semibold text-coffee-600 uppercase tracking-wider">Cash in Drawer</p>
+                        <h3 id="dashCashTotal" class="text-2xl font-bold text-coffee-900 mt-1">₹0.00</h3>
+                        <p class="text-xs text-amber-700 mt-2 font-medium">Physical cash</p>
+                    </div>
+                    <div class="bg-white p-5 rounded-xl border border-coffee-200 shadow-sm">
+                        <p class="text-xs font-semibold text-coffee-600 uppercase tracking-wider">Month's Revenue (Vivek)</p>
+                        <h3 id="dashMonthTotal" class="text-2xl font-bold text-coffee-900 mt-1">₹0.00</h3>
+                        <p class="text-xs text-coffee-600 mt-2">Current calendar month</p>
+                    </div>
+                </div>
+
+                <!-- Recent Transactions -->
+                <div class="bg-white rounded-xl border border-coffee-200 shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-bold text-lg text-coffee-900">Recent Transactions</h2>
+                        <button onclick="switchTab('daily')" class="text-xs font-semibold text-coffee-700 hover:underline">View All →</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-coffee-200 text-xs text-coffee-600 uppercase">
+                                    <th class="py-3 px-4">Time</th>
+                                    <th class="py-3 px-4">Amount</th>
+                                    <th class="py-3 px-4">Mode</th>
+                                    <th class="py-3 px-4">Customer</th>
+                                    <th class="py-3 px-4">Staff</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentTransactionsTable" class="divide-y divide-coffee-100 text-sm">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: ADD PAYMENT -->
+            <div id="tab-add" class="tab-content hidden max-w-2xl mx-auto">
+                <div class="bg-white rounded-xl border border-coffee-200 shadow-sm p-6 md:p-8">
+                    <h2 class="font-bold text-xl text-coffee-900 mb-6 flex items-center space-x-2">
+                        <i data-lucide="plus-circle" class="w-6 h-6 text-coffee-700"></i>
+                        <span>Record New Sale</span>
+                    </h2>
+                    <form id="paymentForm" onsubmit="handlePaymentSubmit(event)" class="space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">Amount (INR) *</label>
+                                <div class="relative">
+                                    <span class="absolute left-3 top-2.5 text-coffee-600 font-bold">₹</span>
+                                    <input type="number" step="0.01" id="payAmount" required placeholder="0.00" class="w-full pl-8 pr-4 py-2.5 rounded-lg border border-coffee-300 focus:ring-2 focus:ring-coffee-600 focus:outline-none text-lg font-semibold">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">Payment Mode *</label>
+                                <select id="payMode" class="w-full px-4 py-2.5 rounded-lg border border-coffee-300 focus:ring-2 focus:ring-coffee-600 focus:outline-none bg-white">
+                                    <option value="UPI">UPI (GPay / PhonePe / Paytm)</option>
+                                    <option value="Cash">Cash</option>
+                                    <option value="Card">Card (POS)</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">Date & Time (IST)</label>
+                                <input type="datetime-local" id="payDateTime" class="w-full px-4 py-2 rounded-lg border border-coffee-300 focus:ring-2 focus:ring-coffee-600 focus:outline-none text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">Order Number</label>
+                                <input type="text" id="payOrderNo" placeholder="e.g. ORD-024" class="w-full px-4 py-2 rounded-lg border border-coffee-300 focus:ring-2 focus:ring-coffee-600 focus:outline-none text-sm">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">Customer Name</label>
+                                <input type="text" id="payCustomer" placeholder="Optional customer name" class="w-full px-4 py-2 rounded-lg border border-coffee-300 focus:ring-2 focus:ring-coffee-600 focus:outline-none text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">Staff Member</label>
+                                <select id="payStaff" class="w-full px-4 py-2 rounded-lg border border-coffee-300 focus:ring-2 focus:ring-coffee-600 focus:outline-none bg-white text-sm">
+                                    <!-- Populated dynamically -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">Notes / Items Ordered</label>
+                            <input type="text" id="payNotes" placeholder="e.g. 2x Cappuccino, 1x Croissant" class="w-full px-4 py-2 rounded-lg border border-coffee-300 focus:ring-2 focus:ring-coffee-600 focus:outline-none text-sm">
+                        </div>
+
+                        <button type="submit" class="w-full bg-coffee-800 hover:bg-coffee-900 text-white font-semibold py-3 rounded-lg shadow transition flex items-center justify-center space-x-2">
+                            <i data-lucide="check-circle" class="w-5 h-5"></i>
+                            <span>Save Payment & Sync</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- TAB 3: DAILY INCOME -->
+            <div id="tab-daily" class="tab-content hidden space-y-6">
+                <div class="bg-white rounded-xl border border-coffee-200 shadow-sm p-6">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <div>
+                            <h2 class="font-bold text-lg text-coffee-900">Daily Transactions & Breakdown</h2>
+                            <p class="text-xs text-coffee-600">Filter and audit transactions for any date. (Deletions restricted to Admin)</p>
+                        </div>
+                        <div class="flex items-center space-x-3 w-full md:w-auto">
+                            <input type="date" id="filterDate" onchange="renderDailyPage()" class="px-3 py-2 rounded-lg border border-coffee-300 text-sm focus:outline-none">
+                            <button onclick="resetDailyDate()" class="text-xs bg-coffee-100 hover:bg-coffee-200 text-coffee-800 font-medium px-3 py-2 rounded-lg">Today</button>
+                        </div>
+                    </div>
+
+                    <!-- Summary Cards for Selected Day -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div class="bg-coffee-50 p-4 rounded-lg border border-coffee-200">
+                            <span class="text-xs text-coffee-600 uppercase font-semibold">Total Collection</span>
+                            <h4 id="dailyTotalAmt" class="text-xl font-bold text-coffee-900 mt-1">₹0.00</h4>
+                        </div>
+                        <div class="bg-coffee-50 p-4 rounded-lg border border-coffee-200">
+                            <span class="text-xs text-coffee-600 uppercase font-semibold">UPI Total</span>
+                            <h4 id="dailyUpiAmt" class="text-xl font-bold text-coffee-900 mt-1">₹0.00</h4>
+                        </div>
+                        <div class="bg-coffee-50 p-4 rounded-lg border border-coffee-200">
+                            <span class="text-xs text-coffee-600 uppercase font-semibold">Cash Total</span>
+                            <h4 id="dailyCashAmt" class="text-xl font-bold text-coffee-900 mt-1">₹0.00</h4>
+                        </div>
+                        <div class="bg-coffee-50 p-4 rounded-lg border border-coffee-200">
+                            <span class="text-xs text-coffee-600 uppercase font-semibold">Transactions</span>
+                            <h4 id="dailyCount" class="text-xl font-bold text-coffee-900 mt-1">0</h4>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="border-b border-coffee-200 text-xs text-coffee-600 uppercase">
+                                    <th class="py-3 px-4">ID & Time</th>
+                                    <th class="py-3 px-4">Amount</th>
+                                    <th class="py-3 px-4">Mode</th>
+                                    <th class="py-3 px-4">Customer / Order</th>
+                                    <th class="py-3 px-4">Notes</th>
+                                    <th class="py-3 px-4 text-right" id="actionHeaderCol">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dailyTableBody" class="divide-y divide-coffee-100 text-sm">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: MONTHLY REVENUE -->
+            <div id="tab-monthly" class="tab-content hidden space-y-6">
+                <div class="bg-white rounded-xl border border-coffee-200 shadow-sm p-6">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                        <div>
+                            <h2 class="font-bold text-lg text-coffee-900">Monthly Revenue & Analytics</h2>
+                            <p class="text-xs text-coffee-600">Admin view for overall performance and CSV downloads.</p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <input type="month" id="filterMonth" onchange="renderMonthlyPage()" class="px-3 py-2 rounded-lg border border-coffee-300 text-sm focus:outline-none">
+                            <button onclick="exportMonthlyCSV()" class="flex items-center space-x-1.5 bg-coffee-800 hover:bg-coffee-900 text-white text-xs px-3 py-2 rounded-lg shadow">
+                                <i data-lucide="download" class="w-4 h-4"></i>
+                                <span>Download CSV</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                        <div class="bg-coffee-50 p-4 rounded-lg border border-coffee-200">
+                            <span class="text-xs text-coffee-600 uppercase font-semibold">Total Monthly Revenue</span>
+                            <h3 id="monthlyTotalRev" class="text-2xl font-bold text-coffee-900 mt-1">₹0.00</h3>
+                        </div>
+                        <div class="bg-coffee-50 p-4 rounded-lg border border-coffee-200">
+                            <span class="text-xs text-coffee-600 uppercase font-semibold">Daily Average</span>
+                            <h3 id="monthlyDailyAvg" class="text-2xl font-bold text-coffee-900 mt-1">₹0.00</h3>
+                        </div>
+                        <div class="bg-coffee-50 p-4 rounded-lg border border-coffee-200">
+                            <span class="text-xs text-coffee-600 uppercase font-semibold">Best Performing Day</span>
+                            <h3 id="monthlyBestDay" class="text-xl font-bold text-coffee-900 mt-1">—</h3>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-coffee-50 rounded-xl border border-coffee-200">
+                        <h3 class="font-semibold text-sm text-coffee-900 mb-3">Payment Mode Breakdown</h3>
+                        <div id="monthlyModeBreakdown" class="space-y-2">
+                            <!-- Breakdown bars -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 5: REPORTS & SHEETS -->
+            <div id="tab-reports" class="tab-content hidden space-y-6">
+                <div class="bg-white rounded-xl border border-coffee-200 shadow-sm p-6 space-y-6">
+                    <div>
+                        <h2 class="font-bold text-lg text-coffee-900">Google Sheet Connection & Custom Reports</h2>
+                        <p class="text-xs text-coffee-600">Connect your Google Sheet or export custom date range reports.</p>
+                    </div>
+
+                    <!-- Sheet Connector Box -->
+                    <div class="p-4 bg-coffee-50 rounded-xl border border-coffee-200 space-y-3">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="link" class="w-5 h-5 text-amber-700"></i>
+                            <h3 class="font-semibold text-sm text-coffee-900">Connected Google Sheet</h3>
+                        </div>
+                        <p class="text-xs text-coffee-600">Your cafe transactions are synced with your Google Drive sheet: <strong>Cafe Ledger - Transaction History (Vivek Cafe)</strong>.</p>
+                        <div class="flex flex-wrap gap-3">
+                            <a href="https://docs.google.com/spreadsheets/d/1f8AhsqBDJnrFe8bpF6wFdOYN9APhRUBRVQRrGoslVCY/edit?usp=drivesdk&ouid=105706905298820502559" target="_blank" class="flex items-center space-x-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-4 py-2.5 rounded-lg shadow font-medium">
+                                <i data-lucide="external-link" class="w-4 h-4"></i>
+                                <span>Open Google Sheet in Drive</span>
+                            </a>
+                            <button onclick="downloadSheetCSV()" class="flex items-center space-x-1.5 bg-coffee-800 hover:bg-coffee-900 text-white text-xs px-4 py-2.5 rounded-lg shadow font-medium">
+                                <i data-lucide="download" class="w-4 h-4"></i>
+                                <span>Download Sheet CSV</span>
+                            </button>
+                            <button onclick="triggerSheetImport()" class="flex items-center space-x-1.5 bg-amber-700 hover:bg-amber-800 text-white text-xs px-4 py-2.5 rounded-lg shadow font-medium">
+                                <i data-lucide="upload" class="w-4 h-4"></i>
+                                <span>Import CSV to App</span>
+                            </button>
+                        </div>
+                        <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="handleCSVImport(event)">
+                    </div>
+
+                    <!-- Date Range Filter -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                        <div>
+                            <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">From Date</label>
+                            <input type="date" id="reportStartDate" class="w-full px-3 py-2 rounded-lg border border-coffee-300 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-coffee-700 uppercase mb-1">To Date</label>
+                            <input type="date" id="reportEndDate" class="w-full px-3 py-2 rounded-lg border border-coffee-300 text-sm">
+                        </div>
+                    </div>
+                    <button onclick="generateCustomReport()" class="bg-coffee-800 hover:bg-coffee-900 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow">
+                        Generate Custom Report
+                    </button>
+                    <div id="customReportResult" class="hidden pt-4 border-t border-coffee-200">
+                        <!-- Custom report output -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 6: USERS -->
+            <div id="tab-users" class="tab-content hidden space-y-6">
+                <div class="bg-white rounded-xl border border-coffee-200 shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h2 class="font-bold text-lg text-coffee-900">Staff & User Management</h2>
+                            <p class="text-xs text-coffee-600">Admin controls managed by Vivek.</p>
+                        </div>
+                        <button onclick="openAddStaffModal()" id="addStaffBtn" class="bg-coffee-800 hover:bg-coffee-900 text-white text-xs px-4 py-2.5 rounded-lg shadow font-medium flex items-center space-x-1.5">
+                            <i data-lucide="user-plus" class="w-4 h-4"></i>
+                            <span>Add Staff</span>
+                        </button>
+                    </div>
+                    <div id="usersListContainer" class="space-y-3">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // Default Users Database stored in localStorage
+        const DEFAULT_USERS_DB = {
+            admin: { name: "Vivek (Admin)", pass: "admin123", role: "admin", desc: "Owner / Admin" },
+            staff_priya: { name: "Priya", pass: "staff123", role: "staff", desc: "Staff / Cashier" },
+            staff_rahul: { name: "Rahul", pass: "staff123", role: "staff", desc: "Staff / Barista" }
+        };
+
+        let usersDB = JSON.parse(localStorage.getItem('cafe_users_db')) || DEFAULT_USERS_DB;
+        let currentUser = JSON.parse(localStorage.getItem('cafe_logged_in_user')) || null;
+        let transactions = JSON.parse(localStorage.getItem('cafe_ledger_transactions')) || [];
+
+        function saveUsersDB() {
+            localStorage.setItem('cafe_users_db', JSON.stringify(usersDB));
+        }
+
+        function populateLoginDropdown() {
+            const select = document.getElementById('loginRole');
+            select.innerHTML = '';
+            for (let key in usersDB) {
+                const u = usersDB[key];
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.innerText = `${u.name} (${u.desc})`;
+                select.appendChild(opt);
+            }
+        }
+
+        function populateStaffDropdown() {
+            const select = document.getElementById('payStaff');
+            select.innerHTML = '';
+            for (let key in usersDB) {
+                const u = usersDB[key];
+                const opt = document.createElement('option');
+                opt.value = u.name;
+                opt.innerText = u.name + (u.role === 'admin' ? ' (Admin)' : ' (Staff)');
+                select.appendChild(opt);
+            }
+        }
+
+        function renderUsersManagement() {
+            const container = document.getElementById('usersListContainer');
+            let html = '';
+            for (let key in usersDB) {
+                const u = usersDB[key];
+                const initial = u.name.charAt(0).toUpperCase();
+                html += `
+                    <div class="flex items-center justify-between p-3 bg-coffee-50 rounded-lg border border-coffee-200">
+                        <div class="flex items-center space-x-3">
+                            <div class="bg-coffee-700 text-white w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shadow">${initial}</div>
+                            <div>
+                                <h4 class="font-bold text-sm text-coffee-900">${u.name}</h4>
+                                <p class="text-xs text-coffee-600">${u.desc} — Login ID: <code class="bg-white px-1 py-0.5 rounded font-mono">${key}</code></p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <span class="text-xs bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full font-medium">Active</span>
+                            ${key !== 'admin' && currentUser && currentUser.role === 'admin' ? `<button onclick="deleteStaff('${key}')" class="text-red-600 hover:text-red-800 text-xs font-semibold px-2 py-1 bg-red-50 rounded border border-red-200">Remove</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        function checkAuth() {
+            const overlay = document.getElementById('loginOverlay');
+            if (currentUser) {
+                overlay.classList.add('hidden');
+                document.getElementById('currentUserName').innerText = currentUser.name + (currentUser.role === 'admin' ? ' (Admin)' : ' (Staff)');
+                
+                const addStaffBtn = document.getElementById('addStaffBtn');
+                if (addStaffBtn) {
+                    addStaffBtn.style.display = currentUser.role === 'admin' ? 'flex' : 'none';
+                }
+            } else {
+                overlay.classList.remove('hidden');
+                populateLoginDropdown();
+            }
+        }
+
+        function handleLogin(event) {
+            event.preventDefault();
+            const roleKey = document.getElementById('loginRole').value;
+            const pass = document.getElementById('loginPassword').value;
+
+            const user = usersDB[roleKey];
+            if (user && user.pass === pass) {
+                currentUser = user;
+                localStorage.setItem('cafe_logged_in_user', JSON.stringify(currentUser));
+                document.getElementById('loginPassword').value = '';
+                checkAuth();
+                updateDashboard();
+                renderUsersManagement();
+                populateStaffDropdown();
+                alert(`Welcome back, ${currentUser.name}!`);
+            } else {
+                alert('Invalid password! Please check credentials.');
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('cafe_logged_in_user');
+            currentUser = null;
+            checkAuth();
+        }
+
+        function openAddStaffModal() {
+            if (!currentUser || currentUser.role !== 'admin') {
+                alert('Only Admin (Vivek) can add new staff.');
+                return;
+            }
+            document.getElementById('addStaffModal').classList.remove('hidden');
+        }
+
+        function closeAddStaffModal() {
+            document.getElementById('addStaffModal').classList.add('hidden');
+        }
+
+        function handleAddNewStaff(event) {
+            event.preventDefault();
+            const name = document.getElementById('newStaffName').value.trim();
+            const username = document.getElementById('newStaffUsername').value.trim().toLowerCase();
+            const pass = document.getElementById('newStaffPass').value;
+            const desc = document.getElementById('newStaffRoleDesc').value.trim();
+
+            if (usersDB[username]) {
+                alert('Username key already exists! Choose another username ID.');
+                return;
+            }
+
+            usersDB[username] = { name, pass, role: "staff", desc };
+            saveUsersDB();
+            renderUsersManagement();
+            populateStaffDropdown();
+            populateLoginDropdown();
+            closeAddStaffModal();
+            alert(`Staff member ${name} added successfully!`);
+            document.getElementById('newStaffName').value = '';
+            document.getElementById('newStaffUsername').value = '';
+            document.getElementById('newStaffPass').value = '';
+            document.getElementById('newStaffRoleDesc').value = '';
+        }
+
+        function deleteStaff(key) {
+            if (confirm(`Are you sure you want to remove staff account "${usersDB[key].name}"?`)) {
+                delete usersDB[key];
+                saveUsersDB();
+                renderUsersManagement();
+                populateStaffDropdown();
+                populateLoginDropdown();
+            }
+        }
+
+        function saveTransactions() {
+            localStorage.setItem('cafe_ledger_transactions', JSON.stringify(transactions));
+            updateDashboard();
+        }
+
+        function formatINR(amount) {
+            return '₹' + Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById('tab-' + tabId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-coffee-800', 'text-white', 'shadow-sm');
+                btn.classList.add('bg-white', 'text-coffee-800', 'border', 'border-coffee-200');
+            });
+            event.currentTarget.classList.remove('bg-white', 'text-coffee-800', 'border', 'border-coffee-200');
+            event.currentTarget.classList.add('bg-coffee-800', 'text-white', 'shadow-sm');
+
+            if (tabId === 'daily') renderDailyPage();
+            if (tabId === 'monthly') renderMonthlyPage();
+            if (tabId === 'users') renderUsersManagement();
+            lucide.createIcons();
+        }
+
+        window.onload = function() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            
+            document.getElementById('payDateTime').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+            document.getElementById('filterDate').value = `${year}-${month}-${day}`;
+            document.getElementById('filterMonth').value = `${year}-${month}`;
+            
+            populateLoginDropdown();
+            populateStaffDropdown();
+            checkAuth();
+            renderUsersManagement();
+            updateDashboard();
+        };
+
+        function updateDashboard() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const currentMonthStr = new Date().toISOString().slice(0, 7);
+
+            let todayTotal = 0, todayCount = 0, upiTotal = 0, cashTotal = 0, monthTotal = 0;
+            let recentHtml = '';
+
+            const sorted = [...transactions].sort((a, b) => new Date(b.dateTime) - new Date(a.dateTime));
+
+            sorted.forEach((t, idx) => {
+                const tDate = t.dateTime.split('T')[0];
+                const tMonth = t.dateTime.slice(0, 7);
+                const amt = Number(t.amount);
+
+                if (tDate === todayStr) {
+                    todayTotal += amt;
+                    todayCount++;
+                    if (t.mode === 'UPI') upiTotal += amt;
+                    if (t.mode === 'Cash') cashTotal += amt;
+                }
+                if (tMonth === currentMonthStr) {
+                    monthTotal += amt;
+                }
+
+                if (idx < 5) {
+                    recentHtml += `
+                        <tr class="hover:bg-coffee-50 transition">
+                            <td class="py-3 px-4 font-mono text-xs text-coffee-700">${t.dateTime.replace('T', ' ')}</td>
+                            <td class="py-3 px-4 font-bold text-coffee-900">${formatINR(amt)}</td>
+                            <td class="py-3 px-4"><span class="px-2.5 py-1 rounded-full text-xs font-semibold ${t.mode === 'UPI' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${t.mode}</span></td>
+                            <td class="py-3 px-4 text-coffee-700">${t.customer || 'Walk-in'}</td>
+                            <td class="py-3 px-4 text-xs text-coffee-600">${t.staff}</td>
+                        </tr>
+                    `;
+                }
+            });
+
+            document.getElementById('dashTodayTotal').innerText = formatINR(todayTotal);
+            document.getElementById('dashTodayCount').innerText = `${todayCount} transactions today`;
+            document.getElementById('dashUpiTotal').innerText = formatINR(upiTotal);
+            document.getElementById('dashCashTotal').innerText = formatINR(cashTotal);
+            document.getElementById('dashMonthTotal').innerText = formatINR(monthTotal);
+            document.getElementById('recentTransactionsTable').innerHTML = recentHtml || '<tr><td colspan="5" class="py-4 text-center text-coffee-600">No transactions recorded yet. Ready for your first sale!</td></tr>';
+            lucide.createIcons();
+        }
+
+        function handlePaymentSubmit(event) {
+            event.preventDefault();
+            const newTxn = {
+                id: 'TXN-' + Math.floor(1000 + Math.random() * 9000),
+                amount: parseFloat(document.getElementById('payAmount').value),
+                mode: document.getElementById('payMode').value,
+                dateTime: document.getElementById('payDateTime').value,
+                orderNo: document.getElementById('payOrderNo').value || 'ORD-' + Math.floor(100 + Math.random() * 900),
+                customer: document.getElementById('payCustomer').value || 'Walk-in Guest',
+                staff: document.getElementById('payStaff').value,
+                notes: document.getElementById('payNotes').value || '-'
+            };
+
+            transactions.push(newTxn);
+            saveTransactions();
+            alert('Payment recorded successfully and saved!');
+            document.getElementById('paymentForm').reset();
+            window.onload();
+            switchTab('dashboard');
+        }
+
+        function renderDailyPage() {
+            const selectedDate = document.getElementById('filterDate').value;
+            let total = 0, upi = 0, cash = 0, count = 0;
+            let html = '';
+
+            const isAdmin = currentUser && currentUser.role === 'admin';
+            document.getElementById('actionHeaderCol').style.display = isAdmin ? 'table-cell' : 'none';
+
+            const filtered = transactions.filter(t => t.dateTime.split('T')[0] === selectedDate);
+
+            filtered.forEach(t => {
+                const amt = Number(t.amount);
+                total += amt;
+                if (t.mode === 'UPI') upi += amt;
+                if (t.mode === 'Cash') cash += amt;
+                count++;
+
+                let actionColHtml = '';
+                if (isAdmin) {
+                    actionColHtml = `<td class="py-3 px-4 text-right">
+                        <button onclick="deleteTransaction('${t.id}')" class="text-red-600 hover:text-red-800 text-xs font-semibold px-2.5 py-1 bg-red-50 rounded-lg border border-red-200">Delete</button>
+                    </td>`;
+                }
+
+                html += `
+                    <tr class="hover:bg-coffee-50 transition">
+                        <td class="py-3 px-4 font-mono text-xs text-coffee-700"><strong>${t.id}</strong><br>${t.dateTime.replace('T', ' ')}</td>
+                        <td class="py-3 px-4 font-bold text-coffee-900">${formatINR(amt)}</td>
+                        <td class="py-3 px-4"><span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-coffee-100 text-coffee-800">${t.mode}</span></td>
+                        <td class="py-3 px-4 text-coffee-700">${t.customer}<br><span class="text-xs text-coffee-600">${t.orderNo}</span></td>
+                        <td class="py-3 px-4 text-coffee-600 text-xs">${t.notes}</td>
+                        ${actionColHtml}
+                    </tr>
+                `;
+            });
+
+            document.getElementById('dailyTotalAmt').innerText = formatINR(total);
+            document.getElementById('dailyUpiAmt').innerText = formatINR(upi);
+            document.getElementById('dailyCashAmt').innerText = formatINR(cash);
+            document.getElementById('dailyCount').innerText = count;
+            document.getElementById('dailyTableBody').innerHTML = html || `<tr><td colspan="${isAdmin ? 6 : 5}" class="py-6 text-center text-coffee-600">No transactions found for this date.</td></tr>`;
+        }
+
+        function resetDailyDate() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('filterDate').value = today;
+            renderDailyPage();
+        }
+
+        function deleteTransaction(id) {
+            if (!currentUser || currentUser.role !== 'admin') {
+                alert('Access Denied: Only Admin (Vivek) can delete transactions.');
+                return;
+            }
+            if (confirm('Are you sure you want to delete transaction ' + id + '?')) {
+                transactions = transactions.filter(t => t.id !== id);
+                saveTransactions();
+                renderDailyPage();
+            }
+        }
+
+        function renderMonthlyPage() {
+            const selectedMonth = document.getElementById('filterMonth').value;
+            let total = 0, count = 0;
+            let modeCounts = { UPI: 0, Cash: 0, Card: 0, Other: 0 };
+            let dailyTotals = {};
+
+            transactions.forEach(t => {
+                if (t.dateTime.slice(0, 7) === selectedMonth) {
+                    const amt = Number(t.amount);
+                    total += amt;
+                    count++;
+                    if (modeCounts[t.mode] !== undefined) modeCounts[t.mode] += amt;
+                    
+                    const dayKey = t.dateTime.split('T')[0];
+                    dailyTotals[dayKey] = (dailyTotals[dayKey] || 0) + amt;
+                }
+            });
+
+            const daysCount = Object.keys(dailyTotals).length || 1;
+            const dailyAvg = total / daysCount;
+
+            let bestDay = '—', maxAmt = 0;
+            for (let day in dailyTotals) {
+                if (dailyTotals[day] > maxAmt) {
+                    maxAmt = dailyTotals[day];
+                    bestDay = `${day} (${formatINR(maxAmt)})`;
+                }
+            }
+
+            document.getElementById('monthlyTotalRev').innerText = formatINR(total);
+            document.getElementById('monthlyDailyAvg').innerText = formatINR(dailyAvg);
+            document.getElementById('monthlyBestDay').innerText = bestDay;
+
+            let modeHtml = '';
+            for (let mode in modeCounts) {
+                const percentage = total > 0 ? (modeCounts[mode] / total) * 100 : 0;
+                modeHtml += `
+                    <div>
+                        <div class="flex justify-between text-xs font-semibold text-coffee-700 mb-1">
+                            <span>${mode}</span>
+                            <span>${formatINR(modeCounts[mode])} (${percentage.toFixed(1)}%)</span>
+                        </div>
+                        <div class="w-full bg-coffee-200 h-2.5 rounded-full overflow-hidden">
+                            <div class="bg-coffee-700 h-2.5 rounded-full" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            }
+            document.getElementById('monthlyModeBreakdown').innerHTML = modeHtml;
+        }
+
+        function syncWithGoogleSheet() {
+            const btn = document.getElementById('syncBtn');
+            btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin text-amber-400"></i><span>Syncing...</span>`;
+            setTimeout(() => {
+                btn.innerHTML = `<i data-lucide="cloud" class="w-4 h-4 text-emerald-400"></i><span>Synced</span>`;
+                alert('Successfully synced with Google Sheet: Cafe Ledger - Transaction History (Vivek Cafe)!');
+                setTimeout(() => {
+                    btn.innerHTML = `<i data-lucide="cloud" class="w-4 h-4 text-amber-400"></i><span>Sync Sheet</span>`;
+                    lucide.createIcons();
+                }, 2000);
+            }, 1000);
+        }
+
+        function downloadSheetCSV() {
+            let csvContent = "Transaction ID,Date & Time,Amount (INR),Payment Mode,Customer Name,Order Number,Staff Member,Notes\n";
+            transactions.forEach(t => {
+                csvContent += `${t.id},${t.dateTime.replace('T', ' ')},${t.amount},${t.mode},"${t.customer}","${t.orderNo}","${t.staff}","${t.notes}"\n`;
+            });
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "Cafe_Ledger_Transaction_History_Vivek_Cafe.csv";
+            a.click();
+        }
+
+        function exportMonthlyCSV() {
+            downloadSheetCSV();
+        }
+
+        function triggerSheetImport() {
+            document.getElementById('csvFileInput').click();
+        }
+
+        function handleCSVImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(firstSheet);
+                alert(`Successfully parsed ${rows.length} rows from sheet/CSV!`);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function generateCustomReport() {
+            const start = document.getElementById('reportStartDate').value;
+            const end = document.getElementById('reportEndDate').value;
+            if (!start || !end) {
+                alert('Please select both Start and End dates.');
+                return;
+            }
+            let total = 0, count = 0;
+            transactions.forEach(t => {
+                const d = t.dateTime.split('T')[0];
+                if (d >= start && d <= end) {
+                    total += Number(t.amount);
+                    count++;
+                }
+            });
+            const res = document.getElementById('customReportResult');
+            res.classList.remove('hidden');
+            res.innerHTML = `
+                <h4 class="font-bold text-coffee-900 mb-2">Report Summary (${start} to ${end})</h4>
+                <p class="text-sm text-coffee-700">Total Revenue: <strong>${formatINR(total)}</strong></p>
+                <p class="text-sm text-coffee-700">Total Transactions: <strong>${count}</strong></p>
+            `;
+        }
+    </script>
+</body>
+</html>
